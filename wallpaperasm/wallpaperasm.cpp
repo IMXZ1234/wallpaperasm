@@ -16,6 +16,12 @@ DWORD idTimerRedraw;
 HBITMAP hBitmapCache;
 HDC hDCCache;
 WCHAR szFileName[MAX_PATH];
+// bitmap
+LPVOID lpDIBBits;
+DWORD dwDIBHeight;
+DWORD dwDIBWidth;
+DWORD dwDIBBitCount;
+WCHAR szTestBuffer[1024];
 
 // 此代码模块中包含的函数的前向声明:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -125,6 +131,62 @@ BOOL CALLBACK SearchWorkerW(HWND hwnd, LPARAM lParam)
     }
     hWinWorkerW = FindWindowEx(NULL, hwnd, L"WorkerW", NULL);
     return FALSE;
+}
+
+HBITMAP GetWallpaperhBmp(LPWSTR lpszFileName) {
+    WORD wFileType;
+    DWORD dwBytesRead;
+    DWORD dwFileSizeLow;
+    DWORD dwFileSizeHigh;
+    HANDLE hFile = CreateFile(lpszFileName, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if (hFile == INVALID_HANDLE_VALUE)
+    {
+        MessageBox(hWinMain, L"Failed to open bmp file!", NULL, MB_OK | MB_ICONEXCLAMATION);
+        return NULL;
+    }
+    if (!ReadFile(hFile, &wFileType, 2, &dwBytesRead, 0))
+    {
+        MessageBox(hWinMain, L"Not a bmp file!", NULL, MB_OK | MB_ICONEXCLAMATION);
+        return NULL;
+    }
+    if (wFileType != 0x4d42) 
+    {
+        MessageBox(hWinMain, L"Not a bmp file!", NULL, MB_OK | MB_ICONEXCLAMATION);
+        return NULL;
+    }
+    SetFilePointer(hFile, 0, NULL, FILE_BEGIN);
+    dwFileSizeLow = GetFileSize(hFile, &dwFileSizeHigh);
+    HANDLE hHeap = HeapCreate(NULL, dwFileSizeLow, NULL);
+    if (hHeap == NULL) 
+    {
+        MessageBox(hWinMain, L"Failed to allocate memory!", NULL, MB_OK | MB_ICONEXCLAMATION);
+        return NULL;
+    }
+    LPVOID lpReadFileBuffer = HeapAlloc(hHeap, NULL, dwFileSizeLow);
+    ReadFile(hFile, lpReadFileBuffer, dwFileSizeLow, &dwBytesRead, 0);
+    CloseHandle(hFile);
+
+    BITMAPFILEHEADER* pstBMFH = (BITMAPFILEHEADER*)lpReadFileBuffer;
+    dwOffsetBits = pstBMFH->bfOffBits;
+    BITMAPINFO* pstBMI = (BITMAPINFO*)lpReadFileBuffer + pstBMFH->bfSize;
+    BITMAPINFOHEADER* pstBMH = &(pstBMI)->bmiHeader;
+    if (pstBMH->biSize == sizeof BITMAPCOREHEADER)
+    {
+        dwDIBHeight = pstBMH->biWidth;
+        dwDIBWidth = pstBMH->biHeight;
+    }
+    else
+    {
+        dwDIBHeight = ((BITMAPCOREHEADER*)pstBMH)->bcHeight;
+        dwDIBWidth = ((BITMAPCOREHEADER*)pstBMH)->bcWidth;
+    }
+
+    HDC hDCWorkerW = GetDC(hWinWorkerW);
+    HDC hDCCompat = CreateCompatibleDC(hDCWorkerW);
+    HBITMAP hBmpCompat = CreateCompatibleBitmap(hDCWorkerW, dwDIBWidth, dwDIBHeight);
+    SelectObject(hDCCompat, hBmpCompat);
+    ReleaseDC(hWinWorkerW, hDCWorkerW);
+    SetDIBitsToDevice(hDCCompat, 0, 0, dwDIBWidth, dwDIBHeight, 0, 0, 0, dwDIBHeight, pstBMI, )
 }
 //
 //  函数: WndProc(HWND, UINT, WPARAM, LPARAM)
